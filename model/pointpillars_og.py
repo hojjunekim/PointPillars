@@ -232,7 +232,7 @@ class PointPillars(nn.Module):
                                         max_voxels=max_voxels)
         self.pillar_encoder = PillarEncoder(voxel_size=voxel_size, 
                                             point_cloud_range=point_cloud_range, 
-                                            in_channel=8, # 9 with reflectance rate 
+                                            in_channel=9, 
                                             out_channel=64)
         self.backbone = Backbone(in_channel=64, 
                                  out_channels=[64, 128, 256], 
@@ -372,7 +372,7 @@ class PointPillars(nn.Module):
             results.append(result)
         return results
 
-    def forward(self, batched_pts, mode='test', batched_gt_2d_pts=None, batched_gt_labels=None):
+    def forward(self, batched_pts, mode='test', batched_gt_bboxes=None, batched_gt_labels=None):
         batch_size = len(batched_pts)
         # batched_pts: list[tensor] -> pillars: (p1 + p2 + ... + pb, num_points, c), 
         #                              coors_batch: (p1 + p2 + ... + pb, 1 + 3), 
@@ -391,9 +391,9 @@ class PointPillars(nn.Module):
         # x: (bs, 384, 248, 216)
         x = self.neck(xs)
 
-        # # bbox_cls_pred: (bs, n_anchors*3, 248, 216) 
-        # # bbox_pred: (bs, n_anchors*7, 248, 216)
-        # # bbox_dir_cls_pred: (bs, n_anchors*2, 248, 216)
+        # bbox_cls_pred: (bs, n_anchors*3, 248, 216) 
+        # bbox_pred: (bs, n_anchors*7, 248, 216)
+        # bbox_dir_cls_pred: (bs, n_anchors*2, 248, 216)
         bbox_cls_pred, bbox_pred, bbox_dir_cls_pred = self.head(x)
 
         # anchors
@@ -410,20 +410,18 @@ class PointPillars(nn.Module):
                                                nclasses=self.nclasses)
             
             return bbox_cls_pred, bbox_pred, bbox_dir_cls_pred, anchor_target_dict
-        # elif mode == 'val':
-        #     results = self.get_predicted_bboxes(bbox_cls_pred=bbox_cls_pred, 
-        #                                         bbox_pred=bbox_pred, 
-        #                                         bbox_dir_cls_pred=bbox_dir_cls_pred, 
-        #                                         batched_anchors=batched_anchors)
-        #     return results
+        elif mode == 'val':
+            results = self.get_predicted_bboxes(bbox_cls_pred=bbox_cls_pred, 
+                                                bbox_pred=bbox_pred, 
+                                                bbox_dir_cls_pred=bbox_dir_cls_pred, 
+                                                batched_anchors=batched_anchors)
+            return results
 
-        # elif mode == 'test':
-        #     results = self.get_predicted_bboxes(bbox_cls_pred=bbox_cls_pred, 
-        #                                         bbox_pred=bbox_pred, 
-        #                                         bbox_dir_cls_pred=bbox_dir_cls_pred, 
-        #                                         batched_anchors=batched_anchors)
-        #     return results
-        if mode == 'feature':
-            return x
+        elif mode == 'test':
+            results = self.get_predicted_bboxes(bbox_cls_pred=bbox_cls_pred, 
+                                                bbox_pred=bbox_pred, 
+                                                bbox_dir_cls_pred=bbox_dir_cls_pred, 
+                                                batched_anchors=batched_anchors)
+            return results
         else:
             raise ValueError   

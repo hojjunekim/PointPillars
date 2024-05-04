@@ -5,6 +5,7 @@ import numpy as np
 import os
 from tqdm import tqdm
 import sys
+
 CUR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(CUR)
 
@@ -32,13 +33,13 @@ def judge_difficulty(annotation_dict):
     return np.array(difficultys, dtype=np.int32)
 
 
-def create_data_info_pkl(data_root, data_type, prefix, label=True, db=False):
+def create_data_info_pkl(data_root, prefix, label=True, db=False):
     sep = os.path.sep
-    print(f"Processing {data_type} data..")
-    ids_file = os.path.join(CUR, 'dataset', 'ImageSets', f'{data_type}.txt')
-    with open(ids_file, 'r') as f:
-        ids = [id.strip() for id in f.readlines()]
-    
+    print("Processing data...")
+    # ids_file = os.path.join(CUR, 'dataset', 'ImageSets', 'train.txt')
+    # with open(ids_file, 'r') as f:
+        # ids = [id.strip() for id in f.readlines()]
+    ids = ['000000', '000001', '000002', '000003', '000004', '000005', '000006']
     split = 'training' if label else 'testing'
 
     kitti_infos_dict = {}
@@ -121,36 +122,22 @@ def create_data_info_pkl(data_root, data_type, prefix, label=True, db=False):
         
         kitti_infos_dict[int(id)] = cur_info_dict
 
-    saved_path = os.path.join(data_root, f'{prefix}_infos_{data_type}.pkl')
+    saved_path = os.path.join(data_root, f'{prefix}_infos.pkl')
     write_pickle(kitti_infos_dict, saved_path)
     if db:
         saved_db_path = os.path.join(data_root, f'{prefix}_dbinfos_train.pkl')
         write_pickle(kitti_dbinfos_train, saved_db_path)
-    return kitti_infos_dict
 
 
 def main(args):
     data_root = args.data_root
     prefix = args.prefix
 
-    ## 1. train: create data infomation pkl file && create reduced point clouds 
-    ##           && create database(points in gt bbox) for data aumentation
-    kitti_train_infos_dict = create_data_info_pkl(data_root, 'train', prefix, db=True)
-
-    ## 2. val: create data infomation pkl file && create reduced point clouds
-    kitti_val_infos_dict = create_data_info_pkl(data_root, 'val', prefix)
-    
-    ## 3. trainval: create data infomation pkl file
-    kitti_trainval_infos_dict = {**kitti_train_infos_dict, **kitti_val_infos_dict}
-    saved_path = os.path.join(data_root, f'{prefix}_infos_trainval.pkl')
-    write_pickle(kitti_trainval_infos_dict, saved_path)
-
-    ## 4. test: create data infomation pkl file && create reduced point clouds
-    kitti_test_infos_dict = create_data_info_pkl(data_root, 'test', prefix, label=False)
+    create_data_info_pkl(data_root, prefix, db=True)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Dataset infomation')
+    parser = argparse.ArgumentParser(description='Dataset information')
     parser.add_argument('--data_root', default='/home/hojkim/dataset', 
                         help='your data root for kitti')
     parser.add_argument('--prefix', default='kitti', 

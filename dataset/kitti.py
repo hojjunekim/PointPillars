@@ -36,8 +36,8 @@ class BaseSampler():
 class Kitti(Dataset):
 
     CLASSES = {
-        'Pedestrian': 0, 
-        'Cyclist': 1, 
+        # 'Pedestrian': 0, 
+        # 'Cyclist': 1, 
         'Car': 2
         }
 
