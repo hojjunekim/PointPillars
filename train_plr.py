@@ -84,7 +84,7 @@ def main(args):
             batched_gt_2d_pts = data_dict['batched_gt_2d_pts']
             batched_gt_labels = data_dict['batched_gt_labels']
             # batched_difficulty = data_dict['batched_difficulty']
-            bbox_cls_pred, bbox_pred, bbox_dir_cls_pred, anchor_target_dict = \
+            bbox_cls_pred, bbox_pred, bbox_dir_cls_pred = \
                 pointpillars(batched_pts=batched_pts, 
                              mode='train',
                              batched_gt_2d_pts=batched_gt_2d_pts, 
@@ -155,7 +155,7 @@ def main(args):
                 batched_gt_bboxes = data_dict['batched_gt_bboxes']
                 batched_labels = data_dict['batched_labels']
                 batched_difficulty = data_dict['batched_difficulty']
-                bbox_cls_pred, bbox_pred, bbox_dir_cls_pred, anchor_target_dict = \
+                bbox_cls_pred, bbox_pred, bbox_dir_cls_pred = \
                     pointpillars(batched_pts=batched_pts, 
                                 mode='train',
                                 batched_gt_bboxes=batched_gt_bboxes, 

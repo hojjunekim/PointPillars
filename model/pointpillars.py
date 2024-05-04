@@ -403,13 +403,7 @@ class PointPillars(nn.Module):
         batched_anchors = [anchors for _ in range(batch_size)]
 
         if mode == 'train':
-            anchor_target_dict = anchor_target(batched_anchors=batched_anchors, 
-                                               batched_gt_bboxes=batched_gt_bboxes, 
-                                               batched_gt_labels=batched_gt_labels, 
-                                               assigners=self.assigners,
-                                               nclasses=self.nclasses)
-            
-            return bbox_cls_pred, bbox_pred, bbox_dir_cls_pred, anchor_target_dict
+            return bbox_cls_pred, bbox_pred, bbox_dir_cls_pred
         # elif mode == 'val':
         #     results = self.get_predicted_bboxes(bbox_cls_pred=bbox_cls_pred, 
         #                                         bbox_pred=bbox_pred, 
