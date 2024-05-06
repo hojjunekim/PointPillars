@@ -183,7 +183,7 @@ class Neck(nn.Module):
 
 
 class Head(nn.Module):
-    def __init__(self, in_channel, n_anchors, n_classes):
+    def __init__(self, in_channel, n_anchors, n_classes): # (384, 6, 3)
         super().__init__()
         
         self.conv_cls = nn.Conv2d(in_channel, n_anchors*n_classes, 1)
@@ -216,6 +216,27 @@ class Head(nn.Module):
         bbox_dir_cls_pred = self.conv_dir_cls(x)
         return bbox_cls_pred, bbox_pred, bbox_dir_cls_pred
 
+class Decoder(nn.Module):
+    def __init__(self, input_size, output_size):
+        super(Decoder, self).__init__()
+        self.decoder = nn.Sequential(
+            nn.Conv2d(in_channels=input_size, out_channels=32, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Flatten(),
+            nn.Linear(128 * 31 * 27, output_size)
+        )
+        
+    def forward(self, x):
+        output = self.decoder(x)
+        return output
+    
 
 class PointPillars(nn.Module):
     def __init__(self,
@@ -241,6 +262,7 @@ class PointPillars(nn.Module):
                          upsample_strides=[1, 2, 4], 
                          out_channels=[128, 128, 128])
         self.head = Head(in_channel=384, n_anchors=2*nclasses, n_classes=nclasses)
+        self.decoder = Decoder(input_size=384, output_size=360)
         
         # anchors
         ranges = [[0, -39.68, -0.6, 69.12, 39.68, -0.6],
@@ -391,19 +413,21 @@ class PointPillars(nn.Module):
         # x: (bs, 384, 248, 216)
         x = self.neck(xs)
 
-        # # bbox_cls_pred: (bs, n_anchors*3, 248, 216) 
-        # # bbox_pred: (bs, n_anchors*7, 248, 216)
-        # # bbox_dir_cls_pred: (bs, n_anchors*2, 248, 216)
-        bbox_cls_pred, bbox_pred, bbox_dir_cls_pred = self.head(x)
+        output = self.decoder(x)
 
-        # anchors
-        device = bbox_cls_pred.device
-        feature_map_size = torch.tensor(list(bbox_cls_pred.size()[-2:]), device=device)
-        anchors = self.anchors_generator.get_multi_anchors(feature_map_size)
-        batched_anchors = [anchors for _ in range(batch_size)]
+        # # # bbox_cls_pred: (bs, n_anchors*3, 248, 216) 
+        # # # bbox_pred: (bs, n_anchors*7, 248, 216)
+        # # # bbox_dir_cls_pred: (bs, n_anchors*2, 248, 216)
+        # bbox_cls_pred, bbox_pred, bbox_dir_cls_pred = self.head(x)
+
+        # # anchors
+        # device = bbox_cls_pred.device
+        # feature_map_size = torch.tensor(list(bbox_cls_pred.size()[-2:]), device=device)
+        # anchors = self.anchors_generator.get_multi_anchors(feature_map_size)
+        # batched_anchors = [anchors for _ in range(batch_size)]
 
         if mode == 'train':
-            return bbox_cls_pred, bbox_pred, bbox_dir_cls_pred
+            return output
         # elif mode == 'val':
         #     results = self.get_predicted_bboxes(bbox_cls_pred=bbox_cls_pred, 
         #                                         bbox_pred=bbox_pred, 

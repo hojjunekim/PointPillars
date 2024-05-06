@@ -16,6 +16,8 @@ from model import PointPillars
 from loss import Loss
 from torch.utils.tensorboard import SummaryWriter
 
+import wandb
+wandb.init(project='point pillar')
 
 def save_summary(writer, loss_dict, global_step, tag, lr=None, momentum=None):
     for k, v in loss_dict.items():
@@ -27,6 +29,8 @@ def save_summary(writer, loss_dict, global_step, tag, lr=None, momentum=None):
 
 def main(args):
     setup_seed()
+    wandb.config.update(args)
+    
     train_dataset = PLR(data_root=args.data_root,
                           split='train')
     val_dataset = PLR(data_root=args.data_root,
@@ -83,59 +87,33 @@ def main(args):
             batched_pts = data_dict['batched_pts']
             batched_gt_2d_pts = data_dict['batched_gt_2d_pts']
             batched_gt_labels = data_dict['batched_gt_labels']
-            # batched_difficulty = data_dict['batched_difficulty']
-            bbox_cls_pred, bbox_pred, bbox_dir_cls_pred = \
+            output = \
                 pointpillars(batched_pts=batched_pts, 
                              mode='train',
                              batched_gt_2d_pts=batched_gt_2d_pts, 
                              batched_gt_labels=batched_gt_labels)
             
-            # bbox_cls_pred = bbox_cls_pred.permute(0, 2, 3, 1).reshape(-1, args.nclasses)
-            # bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 7)
-            # bbox_dir_cls_pred = bbox_dir_cls_pred.permute(0, 2, 3, 1).reshape(-1, 2)
-
-            # batched_bbox_labels = anchor_target_dict['batched_labels'].reshape(-1)
-            # batched_label_weights = anchor_target_dict['batched_label_weights'].reshape(-1)
-            # batched_bbox_reg = anchor_target_dict['batched_bbox_reg'].reshape(-1, 7)
-            # # batched_bbox_reg_weights = anchor_target_dict['batched_bbox_reg_weights'].reshape(-1)
-            # batched_dir_labels = anchor_target_dict['batched_dir_labels'].reshape(-1)
-            # # batched_dir_labels_weights = anchor_target_dict['batched_dir_labels_weights'].reshape(-1)
+            loss_fn = nn.MSELoss()
             
-            # pos_idx = (batched_bbox_labels >= 0) & (batched_bbox_labels < args.nclasses)
-            # bbox_pred = bbox_pred[pos_idx]
-            # batched_bbox_reg = batched_bbox_reg[pos_idx]
-            # # sin(a - b) = sin(a)*cos(b) - cos(a)*sin(b)
-            # bbox_pred[:, -1] = torch.sin(bbox_pred[:, -1].clone()) * torch.cos(batched_bbox_reg[:, -1].clone())
-            # batched_bbox_reg[:, -1] = torch.cos(bbox_pred[:, -1].clone()) * torch.sin(batched_bbox_reg[:, -1].clone())
-            # bbox_dir_cls_pred = bbox_dir_cls_pred[pos_idx]
-            # batched_dir_labels = batched_dir_labels[pos_idx]
+            batched_range = torch.zeros((args.batch_size, 360), device='cuda')
+            for i in range(len(batched_gt_2d_pts)-1):
+                for j in range(len(batched_gt_2d_pts[i])):
+                    batched_range[i][j] = torch.norm(batched_range[i][j])
+                
 
-            # num_cls_pos = (batched_bbox_labels < args.nclasses).sum()
-            # bbox_cls_pred = bbox_cls_pred[batched_label_weights > 0]
-            # batched_bbox_labels[batched_bbox_labels < 0] = args.nclasses
-            # batched_bbox_labels = batched_bbox_labels[batched_label_weights > 0]
+            loss = loss_fn(output, batched_range)
+            loss.backward()
+            optimizer.step()
+            scheduler.step()
 
-            # loss_dict = loss_func(bbox_cls_pred=bbox_cls_pred,
-            #                       bbox_pred=bbox_pred,
-            #                       bbox_dir_cls_pred=bbox_dir_cls_pred,
-            #                       batched_labels=batched_bbox_labels, 
-            #                       num_cls_pos=num_cls_pos, 
-            #                       batched_bbox_reg=batched_bbox_reg, 
-            #                       batched_dir_labels=batched_dir_labels)
-            
-            # loss = loss_dict['total_loss']
-            # loss.backward()
-            # # torch.nn.utils.clip_grad_norm_(pointpillars.parameters(), max_norm=35)
-            # optimizer.step()
-            # scheduler.step()
+            global_step = epoch * len(train_dataloader) + train_step + 1
 
-            # global_step = epoch * len(train_dataloader) + train_step + 1
-
-            # if global_step % args.log_freq == 0:
-            #     save_summary(writer, loss_dict, global_step, 'train',
+            if global_step % args.log_freq == 0:
+                wandb.log({'training loss': loss.item(), 'lr': optimizer.param_groups[0]['lr']})
+            #     save_summary(writer, loss, global_step, 'train',
             #                  lr=optimizer.param_groups[0]['lr'], 
             #                  momentum=optimizer.param_groups[0]['betas'][0])
-            # train_step += 1
+            train_step += 1
         if (epoch + 1) % args.ckpt_freq_epoch == 0:
             torch.save(pointpillars.state_dict(), os.path.join(saved_ckpt_path, f'epoch_{epoch+1}.pth'))
 
@@ -152,52 +130,19 @@ def main(args):
                                 data_dict[key][j] = data_dict[key][j].cuda()
                 
                 batched_pts = data_dict['batched_pts']
-                batched_gt_bboxes = data_dict['batched_gt_bboxes']
-                batched_labels = data_dict['batched_labels']
-                batched_difficulty = data_dict['batched_difficulty']
-                bbox_cls_pred, bbox_pred, bbox_dir_cls_pred = \
+                batched_gt_2d_pts = data_dict['batched_gt_2d_pts']
+                batched_gt_labels = data_dict['batched_gt_labels']
+                output = \
                     pointpillars(batched_pts=batched_pts, 
                                 mode='train',
-                                batched_gt_bboxes=batched_gt_bboxes, 
-                                batched_gt_labels=batched_labels)
+                                batched_gt_2d_pts=batched_gt_2d_pts, 
+                                batched_gt_labels=batched_gt_labels)
                 
-                # bbox_cls_pred = bbox_cls_pred.permute(0, 2, 3, 1).reshape(-1, args.nclasses)
-                # bbox_pred = bbox_pred.permute(0, 2, 3, 1).reshape(-1, 7)
-                # bbox_dir_cls_pred = bbox_dir_cls_pred.permute(0, 2, 3, 1).reshape(-1, 2)
-
-                # batched_bbox_labels = anchor_target_dict['batched_labels'].reshape(-1)
-                # batched_label_weights = anchor_target_dict['batched_label_weights'].reshape(-1)
-                # batched_bbox_reg = anchor_target_dict['batched_bbox_reg'].reshape(-1, 7)
-                # # batched_bbox_reg_weights = anchor_target_dict['batched_bbox_reg_weights'].reshape(-1)
-                # batched_dir_labels = anchor_target_dict['batched_dir_labels'].reshape(-1)
-                # # batched_dir_labels_weights = anchor_target_dict['batched_dir_labels_weights'].reshape(-1)
-                
-                # pos_idx = (batched_bbox_labels >= 0) & (batched_bbox_labels < args.nclasses)
-                # bbox_pred = bbox_pred[pos_idx]
-                # batched_bbox_reg = batched_bbox_reg[pos_idx]
-                # # sin(a - b) = sin(a)*cos(b) - cos(a)*sin(b)
-                # bbox_pred[:, -1] = torch.sin(bbox_pred[:, -1]) * torch.cos(batched_bbox_reg[:, -1])
-                # batched_bbox_reg[:, -1] = torch.cos(bbox_pred[:, -1]) * torch.sin(batched_bbox_reg[:, -1])
-                # bbox_dir_cls_pred = bbox_dir_cls_pred[pos_idx]
-                # batched_dir_labels = batched_dir_labels[pos_idx]
-
-                # num_cls_pos = (batched_bbox_labels < args.nclasses).sum()
-                # bbox_cls_pred = bbox_cls_pred[batched_label_weights > 0]
-                # batched_bbox_labels[batched_bbox_labels < 0] = args.nclasses
-                # batched_bbox_labels = batched_bbox_labels[batched_label_weights > 0]
-
-                # loss_dict = loss_func(bbox_cls_pred=bbox_cls_pred,
-                #                     bbox_pred=bbox_pred,
-                #                     bbox_dir_cls_pred=bbox_dir_cls_pred,
-                #                     batched_labels=batched_bbox_labels, 
-                #                     num_cls_pos=num_cls_pos, 
-                #                     batched_bbox_reg=batched_bbox_reg, 
-                #                     batched_dir_labels=batched_dir_labels)
-                
-                # global_step = epoch * len(val_dataloader) + val_step + 1
-                # if global_step % args.log_freq == 0:
+                global_step = epoch * len(val_dataloader) + val_step + 1
+                if global_step % args.log_freq == 0:
+                    wandb.log({'validation loss': loss.item(), 'lr': optimizer.param_groups[0]['lr']})
                 #     save_summary(writer, loss_dict, global_step, 'val')
-                # val_step += 1
+                val_step += 1
         pointpillars.train()
 
 
@@ -206,7 +151,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_root', default='/home/hojkim/plr/data/2024_04_28_23_26_09', 
                         help='your data root for kitti')
     parser.add_argument('--saved_path', default='pillar_logs')
-    parser.add_argument('--batch_size', type=int, default=6)
+    parser.add_argument('--batch_size', type=int, default=4)
     parser.add_argument('--num_workers', type=int, default=4)
     parser.add_argument('--nclasses', type=int, default=3)
     parser.add_argument('--init_lr', type=float, default=0.00025)
@@ -218,75 +163,3 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     main(args)
-
-
-
-
-# class PointPillarEncoder(nn.Module):
-#     def __init__(self):
-#         super(PointPillarEncoder, self).__init__()
-#         # Define your model architecture here
-#         self.encoder = nn.Sequential(
-#             nn.Linear(3, 64),
-#             nn.ReLU(),
-#             nn.Linear(64, 128),
-#             nn.ReLU(),
-#             nn.Linear(128, 64),
-#         )
-    
-#     def forward(self, x):
-#         return self.encoder(x)
-
-# class ReconstructionModel(nn.Module):
-#     def __init__(self, num_classes):
-#         super(ReconstructionModel, self).__init__()
-#         # Define your decoder architecture here
-#         self.decoder = nn.Sequential(
-#             nn.Linear(64, 128),
-#             nn.ReLU(),
-#             nn.Linear(128, 256),
-#             nn.ReLU(),
-#         )
-#         # Output layer for 2D coordinates
-#         self.coords = nn.Linear(256, 2)
-#         # Output layer for class scores
-#         self.class_score = nn.Linear(256, num_classes)
-
-#     def forward(self, x):
-#         x = self.decoder(x)
-#         coords = self.coords(x)
-#         class_scores = self.class_score(x)
-#         # Assuming a multi-class classification, applying softmax to class scores
-#         # Note: For the actual loss calculation, use logits directly with CrossEntropyLoss
-#         # Softmax here is for illustrative purposes and direct inference usage
-#         class_probs = F.softmax(class_scores, dim=-1)
-#         return coords, class_probs
-
-
-# # Step 3: Create your Dataset and DataLoader
-# data_dir = '/home/hojkim/plr/data/2024_04_28_23_26_09'
-# dataset = PointCloudDataset(data_dir)
-# dataloader = DataLoader(dataset, batch_size=4, shuffle=True)
-
-# # Step 4: Instantiate your models and define loss function and optimizer
-# encoder = PointPillarEncoder()
-# reconstruction_model = ReconstructionModel(num_classes=10)
-# reconstruction_criterion = nn.MSELoss()
-# classification_criterion = nn.CrossEntropyLoss()
-# optimizer = torch.optim.Adam(list(encoder.parameters()) + list(reconstruction_model.parameters()), lr=0.001)
-
-# # Step 5: Training Loop
-# num_epochs = 10
-# for epoch in range(num_epochs):
-#     for pc_full, label_pc_2d_full, label_pc_2d_segmentation in dataloader:
-#         optimizer.zero_grad()
-#         latent_vector = encoder(pc_full)
-#         reconstructed_coords, class_probs = reconstruction_model(latent_vector)
-
-#         reconstruction_loss = reconstruction_criterion(reconstructed_coords, label_pc_2d_full)
-#         classification_loss = classification_criterion(class_probs, label_pc_2d_segmentation)
-#         loss = reconstruction_loss + classification_loss
-
-#         loss.backward()
-#         optimizer.step()
-#     print(f'Epoch {epoch}, Loss: {loss.item()}')
